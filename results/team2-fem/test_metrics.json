@@ -1,0 +1,23 @@
+{
+  "test_designs": 50,
+  "selected_model": "mse",
+  "allowable_mpa": 236.667,
+  "models": {
+    "mse": {
+      "mae_mpa": 0.2498556137084961,
+      "rmse_mpa": 0.3287311386961444,
+      "max_absolute_error_mpa": 0.9364852905273438,
+      "test_batch_inference_seconds": 0.00038699999277014285,
+      "predicted_feasible": 50,
+      "false_feasible": 0
+    },
+    "mae": {
+      "mae_mpa": 0.29517364501953125,
+      "rmse_mpa": 0.3915834299392411,
+      "max_absolute_error_mpa": 1.1043014526367188,
+      "test_batch_inference_seconds": 0.00022770000214222819,
+      "predicted_feasible": 50,
+      "false_feasible": 0
+    }
+  }
+}
