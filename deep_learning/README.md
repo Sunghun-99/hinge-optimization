@@ -8,13 +8,15 @@
 
 ## 파일별 역할
 
+코드는 [prediction 폴더](prediction/)에 있습니다.
+
 | 파일 | 하는 일 |
 | --- | --- |
-| [`data.py`](data.py) | FEM CSV를 읽고 치수와 응력을 mm, MPa로 변환 |
-| [`train.py`](train.py) | 같은 데이터 분할과 초기 가중치로 MSE와 MAE 손실 함수 비교 |
-| [`evaluate.py`](evaluate.py) | 학습 곡선, 테스트 오차, 설계별 예측값 저장 |
-| [`model.py`](model.py) | 모델 정의와 저장된 모델 불러오기 |
-| [`make_demo_data.py`](make_demo_data.py) | 실행 확인용 더미 CSV 생성 |
+| [`data.py`](prediction/data.py) | FEM CSV를 읽고 치수와 응력을 mm, MPa로 변환 |
+| [`train.py`](prediction/train.py) | 같은 데이터 분할과 초기 가중치로 MSE와 MAE 손실 함수 비교 |
+| [`evaluate.py`](prediction/evaluate.py) | 학습 곡선, 테스트 오차, 설계별 예측값 저장 |
+| [`model.py`](prediction/model.py) | 모델 정의와 저장된 모델 불러오기 |
+| [`make_demo_data.py`](prediction/make_demo_data.py) | 실행 확인용 더미 CSV 생성 |
 
 ## FEM 데이터로 다시 학습하기
 
@@ -22,18 +24,18 @@
 
 ```powershell
 python -m pip install torch matplotlib
-python -m deep_learning.train --csv data/hinge_330_full.csv --feature-columns a_mm b_mm t_mm --stress-column sigma_max_MPa --length-unit mm --stress-unit MPa --output-dir deep_learning/results/team2-rerun
-python -m deep_learning.evaluate --csv data/hinge_330_full.csv --run-dir deep_learning/results/team2-rerun --allowable-mpa 236.667
+python -m deep_learning.prediction.train --csv data/hinge_330_full.csv --feature-columns a_mm b_mm t_mm --stress-column sigma_max_MPa --length-unit mm --stress-unit MPa --output-dir deep_learning/results/team2-rerun
+python -m deep_learning.prediction.evaluate --csv data/hinge_330_full.csv --run-dir deep_learning/results/team2-rerun --allowable-mpa 236.667
 ```
 
 ## 더미 데이터로 실행 확인하기
 
 ```powershell
-python -m deep_learning.make_demo_data deep_learning/demo/demo_synthetic.csv
-python -m deep_learning.train --csv deep_learning/demo/demo_synthetic.csv --stress-unit MPa --output-dir deep_learning/demo/results
-python -m deep_learning.evaluate --csv deep_learning/demo/demo_synthetic.csv --run-dir deep_learning/demo/results
+python -m deep_learning.prediction.make_demo_data deep_learning/demo/demo_synthetic.csv
+python -m deep_learning.prediction.train --csv deep_learning/demo/demo_synthetic.csv --stress-unit MPa --output-dir deep_learning/demo/results
+python -m deep_learning.prediction.evaluate --csv deep_learning/demo/demo_synthetic.csv --run-dir deep_learning/demo/results
 ```
 
 ## 3조에서 모델 사용하기
 
-학습 결과 폴더의 `run.json`에서 `selected_model`을 확인합니다. [`model.py`](model.py)의 `load_surrogate()`로 해당 `.pt` 파일을 불러온 뒤 `model.predict_stress(a, b, t)`를 호출합니다. 입력은 mm, 예측값은 MPa입니다.
+학습 결과 폴더의 `run.json`에서 `selected_model`을 확인합니다. [`model.py`](prediction/model.py)의 `load_surrogate()`로 해당 `.pt` 파일을 불러온 뒤 `model.predict_stress(a, b, t)`를 호출합니다. 입력은 mm, 예측값은 MPa입니다.
