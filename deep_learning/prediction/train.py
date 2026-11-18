@@ -66,6 +66,7 @@ def train_one(loss_name, features, stress, split, args) -> dict:
 
     return {
         "best_epoch": best_epoch,
+        "epochs_completed": epoch,
         "validation_mae_mpa": best_val_mae,
         "training_seconds": perf_counter() - started,
     }
@@ -76,9 +77,15 @@ def main() -> None:
     add_data_arguments(parser)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--seed", type=int, default=42)
-    parser.add_argument("--epochs", type=int, default=400)
+    parser.add_argument(
+        "--epochs", type=int, default=10_000,
+        help="Maximum number of training epochs (default: 10000).",
+    )
     parser.add_argument("--batch-size", type=int, default=32)
-    parser.add_argument("--patience", type=int, default=40)
+    parser.add_argument(
+        "--patience", type=int, default=10_000,
+        help="Stop after this many epochs without a new best validation MAE (default: 10000).",
+    )
     parser.add_argument("--lr", type=float, default=0.001)
     args = parser.parse_args()
     if min(args.epochs, args.batch_size, args.patience) < 1 or not 0 < args.lr < float("inf"):
@@ -125,7 +132,8 @@ def main() -> None:
     )
     pending_metadata.replace(args.output_dir / "run.json")
     for name, result in results.items():
-        print(f"{name.upper()}: validation MAE {result['validation_mae_mpa']:.4f} MPa "
+        print(f"{name.upper()}: completed {result['epochs_completed']} epochs; "
+              f"best validation MAE {result['validation_mae_mpa']:.4f} MPa "
               f"at epoch {result['best_epoch']} ({result['training_seconds']:.2f} s)")
     print(f"Selected by validation MAE: {metadata['selected_model']}.")
 
