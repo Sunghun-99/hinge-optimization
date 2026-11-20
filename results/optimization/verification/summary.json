@@ -1,0 +1,67 @@
+{
+  "allowable_stress_MPa": 236.667,
+  "fem_settings": {
+    "E_MPa": 209000.0,
+    "nu": 0.29,
+    "delta_mm": 0.01,
+    "L_mm": 12.0,
+    "device": "cpu"
+  },
+  "tolerances": {
+    "max_prediction_error_pct": 4.0,
+    "max_mesh_change_pct": 5.0,
+    "output_subdir": "verification"
+  },
+  "selected": {
+    "load_P_N_per_mm": 3.0,
+    "a_mm": 3.12,
+    "b_mm": 1.66,
+    "t_mm": 0.7,
+    "pred_sigma_at_delta_MPa": 50.11811065673828,
+    "fem_sigma_at_delta_MPa": 50.98545165386413,
+    "pred_reaction_N_per_mm": 0.6786584258079529,
+    "fem_reaction_N_per_mm": 0.6771993565890284,
+    "pred_sigma_F_MPa": 221.54640133026535,
+    "fem_sigma_F_MPa": 225.8660665775218,
+    "prediction_error_pct": -1.9124896947606995,
+    "safety_margin_pct": 4.563768257711553,
+    "fem_below_allowable": true,
+    "prediction_within_tolerance": true,
+    "triangles": 5126,
+    "fem_seconds": 4.751467300000513
+  },
+  "mesh_refinement": {
+    "levels": [
+      {
+        "mesh_factor": 1.6,
+        "triangles": 2174,
+        "sigma_at_delta_MPa": 50.72451100041975,
+        "reaction_N_per_mm": 0.6881279453217246,
+        "sigma_F_MPa": 221.1413357585887
+      },
+      {
+        "mesh_factor": 1.0,
+        "triangles": 5126,
+        "sigma_at_delta_MPa": 50.98545165386413,
+        "reaction_N_per_mm": 0.6771993565890284,
+        "sigma_F_MPa": 225.8660665775218
+      },
+      {
+        "mesh_factor": 0.65,
+        "triangles": 12316,
+        "sigma_at_delta_MPa": 50.89193925114236,
+        "reaction_N_per_mm": 0.6754353755401041,
+        "sigma_F_MPa": 226.0406003036806
+      }
+    ],
+    "change_1.0_to_0.65_pct": 0.0772731064933696,
+    "converged": true,
+    "fine_mesh_below_allowable": true,
+    "fem_seconds": 4.244992299998557
+  },
+  "sweep": {
+    "designs": 11,
+    "all_below_allowable": true,
+    "max_abs_prediction_error_pct": 4.063717646422038
+  }
+}

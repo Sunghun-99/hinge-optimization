@@ -1,0 +1,58 @@
+{
+  "description": "Team 3 optimization settings. Minimize hinge thickness t subject to the load-controlled maximum stress sigma_F = sigma_max * P / R staying below (1 - surrogate_margin) * allowable stress.",
+  "data_csv": "data/hinge_330_full.csv",
+  "split_run_json": "deep_learning/results/team2-fem/run.json",
+  "stress_model": "deep_learning/results/team2-fem/mse.pt",
+  "reaction_model_dir": "results/optimization/reaction_model_t3",
+  "reaction_model_target": "reaction_over_t3",
+  "load_P_N_per_mm": 3.0,
+  "load_sweep_N_per_mm": [
+    1.0,
+    1.5,
+    2.0,
+    2.5,
+    3.0,
+    3.5,
+    4.0,
+    4.5,
+    5.0,
+    5.5,
+    6.0
+  ],
+  "allowable_stress_MPa": 236.667,
+  "surrogate_margin": 0.04,
+  "fem": {
+    "E_MPa": 209000.0,
+    "nu": 0.29,
+    "delta_mm": 0.01,
+    "L_mm": 12.0,
+    "device": "cpu"
+  },
+  "design_bounds_mm": {
+    "a": [
+      2.0,
+      4.0
+    ],
+    "b": [
+      1.0,
+      2.0
+    ],
+    "t": [
+      0.5,
+      1.0
+    ]
+  },
+  "grid_step_mm": {
+    "a": 0.02,
+    "b": 0.01,
+    "t": 0.001
+  },
+  "final_t_rounding_mm": 0.01,
+  "batch_size": 500000,
+  "output_dir": "results/optimization",
+  "verification": {
+    "max_prediction_error_pct": 4.0,
+    "max_mesh_change_pct": 5.0,
+    "output_subdir": "verification"
+  }
+}

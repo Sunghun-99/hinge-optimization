@@ -1,0 +1,146 @@
+# 3조 힌지 최적 설계 탐색
+
+1조 FEM 데이터와 2조 응력 서로게이트로, **하중 P를 받을 때 최대응력이 허용응력 이하가 되는 가장 얇은 힌지**를 찾습니다. 1조·2조의 코드와 결과물은 수정하지 않고 그대로 사용합니다.
+
+**최종 설계 (P = 3 N/mm): a = 3.12 mm, b = 1.66 mm, t = 0.70 mm**
+warp.fem 재해석 결과 σ_F = 225.9 MPa로, 허용응력 236.667 MPa보다 4.6% 여유가 있습니다.
+
+## 1. 문제 정의
+
+```
+minimize    t
+subject to  σ_F(a, b, t) = σ_max(a, b, t) × P / R(a, b, t)  ≤  (1 − 0.04) × 236.667 MPa  (= 227.2 MPa)
+            2.0 ≤ a ≤ 4.0,  1.0 ≤ b ≤ 2.0,  0.5 ≤ t ≤ 1.0   (mm, 1조 설계 범위, 외삽 없음)
+보조 기준   선택한 t에서 σ_F가 가장 낮은 (a, b)
+```
+
+| 기호 | 의미 | 출처 |
+|---|---|---|
+| σ_max | 우측 끝 변위 δ = 0.01 mm일 때 최대 von Mises 응력 (MPa) | 2조 MLP `deep_learning/results/team2-fem/mse.pt` |
+| R | 같은 조건의 우측 끝 반력, 폭 1 mm당 (N/mm) | 3조 MLP (R/t³ 학습), 아래 2절 |
+| P | 설계 하중, 폭 1 mm당 (N/mm) | 가정값 3 N/mm, 민감도 1–6 N/mm |
+| 0.04 | 서로게이트 오차 여유 | 검증셋 σ_F 최대 상대오차 3.44%를 올림 |
+
+**하중 제어로 정의한 이유**
+- 1조 해석 조건(변위 제어, δ = 0.01 mm)에서는 330개 설계가 모두 허용응력 이하입니다(26.8–97.1 MPa).
+- 게다가 t가 얇을수록 응력이 작아져서, "허용응력 이하 최소 t"의 답이 t = 0.5 mm로 자명해집니다.
+- 해석은 선형탄성이므로 FEM 결과(σ_max, R)를 하중 기준 응력 σ_F = σ_max × P / R로 환산할 수 있습니다. FEM 해석 조건은 제안서·1조 설정 그대로이고, 환산은 최적화 단계에서만 합니다.
+- 보 이론 검산: σ ≈ 6·P·(L/2)/t² = 36P/t²는 t = 0.5에서 약 144 MPa(P = 1)이고, FEM 환산값 142–152 MPa와 일치합니다.
+
+## 2. 반력 서로게이트
+
+2조 학습 코드(`deep_learning/prediction/train.py`)를 **수정 없이** 실행해 반력 모델을 추가로 학습했습니다. 구조(3→16→8→1 MLP), 데이터 분할(학습 230 / 검증 50 / 테스트 50, seed 42), 손실 함수 비교(MSE vs MAE) 모두 2조와 같습니다.
+
+반력은 보의 굽힘 강성처럼 t³에 비례해서, 설계 범위 안에서 0.18–2.48 N/mm로 약 14배 차이가 납니다. R을 그대로 학습하면 R이 작은 얇은 설계에서 상대오차가 커지고, 최적해가 바로 그 구간에 있습니다. 그래서 학습 대상을 **R/t³**(범위 약 1.4–3.8)으로 바꿨습니다(`make_reaction_data.py`).
+
+| 반력 모델 | 결과 폴더 | 검증 σ_F 평균 / 최대 상대오차 |
+|---|---|---|
+| R 직접, 400 에포크 (선택: MAE) | `results/optimization/reaction_model` | 1.80% / 11.10% |
+| R 직접, 3000 에포크 (선택: MSE) | `results/optimization/reaction_model_long` | 1.84% / 9.37% |
+| **R/t³, 3000 에포크 (선택: MAE)** | **`results/optimization/reaction_model_t3`** | **1.07% / 3.44%** |
+
+- σ_F 오차는 2조 σ 모델과 반력 모델을 합친 값의 상대오차입니다.
+- 모델 선택은 2조와 같이 검증 MAE로 했습니다. 최종 모델의 테스트 σ_F 오차는 평균 0.76%, 최대 3.63%입니다.
+
+## 3. 파일 구성
+
+| 파일 | 하는 일 |
+|---|---|
+| `config/optimization.json` | 하중, 허용응력, 여유, FEM 물성(E, ν, δ, L), 설계 범위, 탐색 간격, 모델 경로, 재검증 기준 |
+| `optimization/make_reaction_data.py` | 1조 CSV에서 R/t³ 학습용 CSV 생성 (행 순서 유지 → 2조와 같은 분할) |
+| `optimization/surrogates.py` | 2조 σ 모델과 3조 반력 모델을 불러와 σ_F 계산 |
+| `optimization/optimize.py` | 격자 전수 탐색(101 × 101 × 501 = 5,110,701점), P 민감도, 결과 저장 |
+| `optimization/baseline.py` | MLP와 비-딥러닝 방법(선형 보간, RBF 보간, FEM 330개 스윕) 비교 |
+| `optimization/verify.py` | 1조 `data/hinge_fem.py`(warp.fem)로 최종 설계 재해석, 메시 수렴, P별 설계 검증 |
+
+## 4. 실행 환경
+
+| 항목 | 버전 |
+|---|---|
+| OS / CPU | Windows, Intel64 Family 6 Model 142 (CPU 4 스레드, GPU 사용 안 함) |
+| Python | 3.12.10 |
+| PyTorch | 2.15.0+cpu |
+| NumPy / SciPy / Matplotlib | 2.5.5 / 1.18.1 / 3.11 |
+| NVIDIA Warp (`warp-lang`, warp.fem) | 1.16.0 |
+| Gmsh | 4.15.2 |
+
+모든 단계가 CPU에서 수 초–1분 안에 끝납니다. 버전은 1조(Warp, Gmsh, SciPy, Python)와 2조(PyTorch)의 기록과 같습니다.
+
+## 5. 실행 순서
+
+저장소 최상위 폴더에서, 가상환경을 활성화한 상태로 실행합니다(Windows PowerShell).
+
+```powershell
+py -3.12 -m venv .venv
+.venv\Scripts\activate
+python -m pip install torch numpy scipy matplotlib warp-lang==1.16.0 gmsh==4.15.2
+```
+
+| 순서 | 명령 | 런타임 |
+|---|---|---|
+| 1. 반력 학습 데이터 생성 | `python -m optimization.make_reaction_data` | 1초 미만 |
+| 2. 반력 모델 학습 (2조 코드) | `python -m deep_learning.prediction.train --csv results/optimization/reaction_dataset.csv --feature-columns a_mm b_mm t_mm --stress-column reaction_over_t3_N_per_mm4 --length-unit mm --stress-unit MPa --epochs 3000 --patience 300 --output-dir results/optimization/reaction_model_t3` | 35초 (MSE 25.6초 + MAE 9.3초) |
+| 3. 반력 모델 평가 (2조 코드) | `python -m deep_learning.prediction.evaluate --csv results/optimization/reaction_dataset.csv --run-dir results/optimization/reaction_model_t3` | 수 초 |
+| 4. 최적 설계 탐색 | `python -m optimization.optimize` | 1.1초 (격자 평가 0.99초) |
+| 5. 베이스라인 비교 | `python -m optimization.baseline` | 약 35초 (RBF 격자 평가 31초) |
+| 6. warp.fem 재검증 | `python -m optimization.verify --sweep` | 약 50초 (FEM 13회 + 메시 수렴 3회) |
+
+- 2번의 출력 폴더가 이미 있으면 2조 코드가 오류를 냅니다. 다시 학습할 때는 폴더를 지우거나 다른 이름을 쓰세요.
+- 2·3번 출력의 "MPa"는 2조 코드의 표기일 뿐이고, 실제 단위는 N/mm⁴(R/t³)입니다.
+- `verify.py`는 FEM 물성을 config에서 자동으로 넘깁니다. `hinge_fem.py`를 직접 실행할 때는 `--E 209000 --nu 0.29 --delta 0.01 --L 12`를 꼭 넣어야 합니다(기본값은 테스트용).
+- 2조 `evaluate.py`를 `deep_learning/results/team2-fem`에 대해 실행하면 2조 결과 파일을 덮어쓰니 실행하지 마세요.
+
+## 6. 결과
+
+### 최적 설계 (P = 3 N/mm)
+
+| 항목 | 값 |
+|---|---|
+| 연속 탐색 최소 두께 t* | 0.692 mm |
+| 최종 설계 (t는 0.01 mm 단위로 올림) | a = 3.12, b = 1.66, **t = 0.70 mm** |
+| 서로게이트 예측 σ_F | 221.5 MPa |
+| warp.fem 재해석 σ_F | **225.9 MPa** (예측 오차 −1.91%) |
+| 허용응력 대비 여유 | 4.6% |
+| 메시 수렴 (요소 2,174 → 5,126 → 12,316개) | 221.1 → 225.9 → 226.0 MPa, 기본→최세 메시 변화 0.08% |
+
+그림: `results/optimization/stress_vs_t.png`(t에 따른 응력, FEM 점, 허용선), `results/optimization/verification/selected/hinge_stress.png`(응력 분포)
+
+### 하중 민감도와 재검증
+
+| P (N/mm) | t* (mm) | 최종 (a, b, t) | 예측 σ_F | warp.fem σ_F | 예측 오차 |
+|---|---|---|---|---|---|
+| 1.0 | 0.500 | 2.70, 1.06, 0.50 | 143.0 | 149.1 | −4.06% |
+| 1.5 | 0.500 | 2.70, 1.06, 0.50 | 214.6 | 223.6 | −4.06% |
+| 2.0 | 0.562 | 3.00, 1.13, 0.57 | 221.2 | 226.3 | −2.28% |
+| 2.5 | 0.630 | 3.26, 1.20, 0.63 | 227.1 | 231.1 | −1.70% |
+| **3.0** | **0.692** | **3.12, 1.66, 0.70** | **221.5** | **225.9** | **−1.91%** |
+| 3.5 | 0.750 | 3.12, 1.61, 0.75 | 227.1 | 231.5 | −1.90% |
+| 4.0 | 0.805 | 3.42, 1.78, 0.81 | 224.2 | 226.1 | −0.83% |
+| 4.5 | 0.851 | 3.56, 1.84, 0.86 | 221.9 | 226.7 | −2.11% |
+| 5.0 | 0.896 | 3.78, 1.97, 0.90 | 225.0 | 230.4 | −2.36% |
+| 5.5 | 0.942 | 3.86, 1.98, 0.95 | 223.6 | 230.3 | −2.94% |
+| 6.0 | 0.989 | 3.90, 1.97, 0.99 | 226.6 | 229.7 | −1.36% |
+
+- 11개 설계 모두 warp.fem 기준으로 허용응력 236.667 MPa 이하입니다(최대 231.5 MPa).
+- P = 1–1.5에서는 설계 범위 하한 t = 0.5에서 이미 제약을 만족합니다.
+- 그림: `results/optimization/sensitivity_P.png`, 상세 값: `sensitivity_P.csv`, `verification/sweep_verification.csv`
+
+### 비-딥러닝 베이스라인 비교 (P = 3 N/mm)
+
+| 방법 | 테스트 σ_F 평균 / 최대 오차 | 최종 (a, b, t) | 준비 시간 | 격자 평가 |
+|---|---|---|---|---|
+| MLP (2조 σ + 3조 R/t³) | 0.76% / 3.63% | 3.12, 1.66, 0.70 | 학습 43.8초 | 0.92초 |
+| 선형 보간 | 0.78% / 3.44% | 4.00, 1.70, 0.70 | 0.01초 | 1.06초 |
+| RBF 보간 (thin-plate spline) | 0.90% / 4.62% | 4.00, 1.73, 0.70 | 0.02초 | 31.0초 |
+| FEM 330개 스윕 | – (FEM 값 그대로) | 4.00, 1.70, 0.70 | – | – |
+
+- 모든 방법은 같은 FEM 데이터 330개(해석시간 합계 111.8초)를 씁니다. 보간 모델은 2조와 같은 학습 + 검증 280개로 만들고, 같은 테스트 50개로 평가했습니다.
+- 그림: `results/optimization/baseline_sensitivity_P.png`, 상세 값: `baseline_comparison.csv`, `baseline_sensitivity_P.csv`
+
+## 7. 해석과 한계
+
+- **a, b의 영향이 작습니다.** 같은 t에서 a, b에 따른 응력 차이는 약 5% 이내라서, 최소 두께는 사실상 하중 P로 정해집니다. 그래서 고른 (a, b)는 하중마다 꽤 달라지지만, 최적점 근처가 평평하다는 뜻이므로 설계 성능 차이는 작습니다.
+- **서로게이트는 최적점에서 응력을 1–4% 낮게 예측했습니다.** 많은 후보 중 예측값이 가장 낮은 설계를 고르면 오차가 낙관적인 쪽으로 치우칩니다. 4% 여유를 둔 덕분에 재해석한 실제 응력도 모두 허용응력 이하였습니다.
+- **이 문제에서는 선형 보간도 MLP만큼 정확합니다.** 입력이 3개이고, 데이터가 규칙적인 격자이며, 응답이 매끄럽기 때문입니다. MLP의 장점은 연속·미분 가능한 예측, 데이터의 볼록 껍질 밖에서도 정의되는 예측, 입력 변수가 늘어날 때의 확장성입니다. FEM 스윕은 t를 0.1 mm 단위로만 고를 수 있어서, 연속 탐색보다 두꺼운 설계를 고르는 경우가 있습니다(예: P = 2.5에서 0.70 vs 0.63 mm).
+- **P = 3 N/mm는 실제 제품 사양이 아닌 가정값입니다.** 그래서 P = 1–6 민감도 결과를 함께 제시합니다. 물성·허용응력도 1조가 정한 단순화 모델 기준입니다.
+- **1조 FEM의 반력은 실행 환경에 따라 최대 약 1% 달라질 수 있습니다.** 강성행렬을 단정도(float32)로 조립하기 때문이고, Linux에서 재실행하면 CSV 값과 최대 0.9% 차이가 났습니다. 이 README의 수치는 모두 위 Windows 환경에서 실행한 결과입니다.
