@@ -41,6 +41,8 @@ subject to  σ_F(a, b, t) = σ_max(a, b, t) × P / R(a, b, t)  ≤  (1 − 0.04)
 
 - σ_F 오차는 2조 σ 모델과 반력 모델을 합친 값의 상대오차입니다.
 - 모델 선택은 2조와 같이 검증 MAE로 했습니다. 최종 모델의 테스트 σ_F 오차는 평균 0.76%, 최대 3.63%입니다.
+- 참고로 2조 σ 모델 단독의 상대오차는 검증 평균 0.64%·최대 2.48%, 테스트 평균 0.49%·최대 1.87%입니다. 따라서 σ_F 오차의 상당 부분은 반력 쪽에서 옵니다.
+- 1조 FEM의 반력 값 자체에도 실행 환경에 따른 약 1% 수준의 수치 차이가 있어서(7절), 최대 오차를 이보다 크게 줄이기는 어렵습니다.
 
 ## 3. 파일 구성
 
@@ -55,16 +57,32 @@ subject to  σ_F(a, b, t) = σ_max(a, b, t) × P / R(a, b, t)  ≤  (1 − 0.04)
 
 ## 4. 실행 환경
 
+이 README의 학습, 최적화, 재검증 결과는 모두 아래 환경에서 실행했습니다.
+
+**하드웨어**
+
+| 항목 | 사양 |
+|---|---|
+| 기기 | LG gram 15ZB995-GP5ALF |
+| CPU | Intel Core i5-10210U @ 1.60 GHz  |
+| 메모리 | 16 GB RAM |
+| GPU | 사용 안 함 (모든 계산 CPU, PyTorch 스레드 4개, Warp `device=cpu`) |
+| 운영체제 | Windows 11 Pro 64비트 (빌드 26200) |
+
+**소프트웨어**
+
 | 항목 | 버전 |
 |---|---|
-| OS / CPU | Windows, Intel64 Family 6 Model 142 (CPU 4 스레드, GPU 사용 안 함) |
-| Python | 3.12.10 |
+| Python | 3.12.10 (가상환경 `.venv`) |
 | PyTorch | 2.15.0+cpu |
-| NumPy / SciPy / Matplotlib | 2.5.5 / 1.18.1 / 3.11 |
+| NumPy / SciPy / Matplotlib | 2.5.5 / 1.18.1 / 3.11.2 |
 | NVIDIA Warp (`warp-lang`, warp.fem) | 1.16.0 |
 | Gmsh | 4.15.2 |
+| 편집기 / 셸 | VS Code, PowerShell |
 
-모든 단계가 CPU에서 수 초–1분 안에 끝납니다. 버전은 1조(Warp, Gmsh, SciPy, Python)와 2조(PyTorch)의 기록과 같습니다.
+- 버전은 1조(Python, Warp, Gmsh, SciPy)와 2조(PyTorch)의 기록과 같습니다.
+- 모든 단계가 일반 노트북 CPU에서 수 초–1분 안에 끝나며, 실행 중 최대 메모리 사용량은 약 0.9 GB입니다(베이스라인 비교 기준).
+- 난수 seed는 2조와 같은 42이고, 같은 환경에서 다시 실행하면 같은 결과가 나옵니다.
 
 ## 5. 실행 순서
 
@@ -83,7 +101,7 @@ python -m pip install torch numpy scipy matplotlib warp-lang==1.16.0 gmsh==4.15.
 | 3. 반력 모델 평가 (2조 코드) | `python -m deep_learning.prediction.evaluate --csv results/optimization/reaction_dataset.csv --run-dir results/optimization/reaction_model_t3` | 수 초 |
 | 4. 최적 설계 탐색 | `python -m optimization.optimize` | 1.1초 (격자 평가 0.99초) |
 | 5. 베이스라인 비교 | `python -m optimization.baseline` | 약 35초 (RBF 격자 평가 31초) |
-| 6. warp.fem 재검증 | `python -m optimization.verify --sweep` | 약 50초 (FEM 13회 + 메시 수렴 3회) |
+| 6. warp.fem 재검증 | `python -m optimization.verify --sweep` | 약 50초 (FEM 단일 해석 12회 + 메시 수렴 3회) |
 
 - 2번의 출력 폴더가 이미 있으면 2조 코드가 오류를 냅니다. 다시 학습할 때는 폴더를 지우거나 다른 이름을 쓰세요.
 - 2·3번 출력의 "MPa"는 2조 코드의 표기일 뿐이고, 실제 단위는 N/mm⁴(R/t³)입니다.
@@ -102,6 +120,13 @@ python -m pip install torch numpy scipy matplotlib warp-lang==1.16.0 gmsh==4.15.
 | warp.fem 재해석 σ_F | **225.9 MPa** (예측 오차 −1.91%) |
 | 허용응력 대비 여유 | 4.6% |
 | 메시 수렴 (요소 2,174 → 5,126 → 12,316개) | 221.1 → 225.9 → 226.0 MPa, 기본→최세 메시 변화 0.08% |
+
+**재검증 방법과 판정 기준** (`config/optimization.json`의 `verification`)
+- 1조 `data/hinge_fem.py`를 수정 없이 호출합니다. Gmsh 메시 → warp.fem(`Trimesh2D`, `integrate`)으로 평면응력 강성행렬 조립 → SciPy로 풀이 → von Mises 응력 계산 순서이고, 물성은 1조 조건(E = 209000 MPa, ν = 0.29, δ = 0.01 mm, L = 12 mm)입니다.
+- 판정 1: warp.fem σ_F ≤ 허용응력 236.667 MPa (설계 안전성)
+- 판정 2: |예측 / warp.fem − 1| ≤ 4% (서로게이트 신뢰성)
+- 판정 3: 메시 계수 1.0 → 0.65에서 σ_F 변화 ≤ 5%이고, 가장 촘촘한 메시에서도 허용응력 이하 (메시 수렴)
+- 최종 설계는 세 기준을 모두 통과했습니다. 결과 파일: `results/optimization/verification/summary.json`
 
 그림: `results/optimization/stress_vs_t.png`(t에 따른 응력, FEM 점, 허용선), `results/optimization/verification/selected/hinge_stress.png`(응력 분포)
 
@@ -135,7 +160,21 @@ python -m pip install torch numpy scipy matplotlib warp-lang==1.16.0 gmsh==4.15.
 | FEM 330개 스윕 | – (FEM 값 그대로) | 4.00, 1.70, 0.70 | – | – |
 
 - 모든 방법은 같은 FEM 데이터 330개(해석시간 합계 111.8초)를 씁니다. 보간 모델은 2조와 같은 학습 + 검증 280개로 만들고, 같은 테스트 50개로 평가했습니다.
+- 공정한 비교를 위해 보간 모델도 MLP와 똑같이 σ_max와 R/t³ 두 값을 따로 예측해 σ_F로 합칩니다. 바뀌는 것은 회귀 방법뿐입니다.
+- 보간 입력 (a, b, t)는 설계 범위 기준으로 [0, 1]로 정규화했습니다. 선형 보간(`scipy.interpolate.LinearNDInterpolator`)은 학습점의 볼록 껍질 밖에서 값이 정의되지 않아 최근접값(`NearestNDInterpolator`)으로 대체하고, RBF 보간(`RBFInterpolator`)은 thin-plate spline 커널을 씁니다. 격자 평가는 5만 점씩 나눠 메모리를 제한했습니다.
+- FEM 스윕은 서로게이트 오차가 없으므로 여유 없이 허용응력 236.667 MPa를 그대로 제약으로 썼습니다.
 - 그림: `results/optimization/baseline_sensitivity_P.png`, 상세 값: `baseline_comparison.csv`, `baseline_sensitivity_P.csv`
+
+### 계산 비용: 서로게이트를 쓰는 이유
+
+| 방법 | 510만 개 설계를 평가하는 데 걸리는 시간 |
+|---|---|
+| FEM 직접 해석 (1회 평균 0.339초 × 5,110,701개) | 약 1,730,000초 ≈ **약 20일** |
+| MLP 서로게이트 (격자 평가) | **약 1초** |
+
+- MLP 방식의 전체 비용은 FEM 데이터 생성 111.8초 + 학습 43.8초(2조 σ 모델 + 3조 반력 모델) + 탐색 1.1초로 약 157초입니다.
+- 학습 데이터 330개를 이미 만들어 둔 이 문제에서는 FEM 스윕도 바로 쓸 수 있습니다. 서로게이트의 이점은 330개 격자에 없는 설계까지 촘촘하게(t 0.001 mm 간격) 탐색할 수 있다는 데 있습니다.
+- 1회 평균 0.339초는 1조 배치 해석 기록이고, 단일 실행(`verify.py`)은 프로그램 시작과 Warp 초기화 때문에 1회 약 3초(첫 실행은 커널 컴파일로 약 11초)가 걸립니다.
 
 ## 7. 해석과 한계
 
