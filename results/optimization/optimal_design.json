@@ -1,0 +1,72 @@
+{
+  "problem": {
+    "objective": "minimize t",
+    "constraint": "sigma_max * P / R <= (1 - margin) * allowable",
+    "tie_break": "lowest sigma_F at the chosen t",
+    "load_P_N_per_mm": 3.0,
+    "allowable_stress_MPa": 236.667,
+    "surrogate_margin": 0.04,
+    "stress_limit_MPa": 227.20032
+  },
+  "design": {
+    "load_P_N_per_mm": 3.0,
+    "feasible": true,
+    "t_star_mm": 0.692,
+    "a_at_t_star_mm": 3.1,
+    "b_at_t_star_mm": 1.65,
+    "sigma_F_at_t_star_MPa": 226.53500366210938,
+    "rounded_design_inside_range": true,
+    "a_mm": 3.12,
+    "b_mm": 1.66,
+    "t_mm": 0.7,
+    "sigma_F_pred_MPa": 221.54640197753906,
+    "feasible_ab_share_at_t": 0.4017253210469562,
+    "surrogate_check": {
+      "sigma_at_delta_MPa": 50.11811065673828,
+      "reaction_N_per_mm": 0.6786584258079529,
+      "sigma_under_load_MPa": 221.54640133026535
+    }
+  },
+  "grid": {
+    "points": 5110701,
+    "a_count": 101,
+    "b_count": 101,
+    "t_count": 501,
+    "steps_mm": {
+      "a": 0.02,
+      "b": 0.01,
+      "t": 0.001
+    },
+    "bounds_mm": {
+      "a": [
+        2.0,
+        4.0
+      ],
+      "b": [
+        1.0,
+        2.0
+      ],
+      "t": [
+        0.5,
+        1.0
+      ]
+    }
+  },
+  "timing_seconds": {
+    "load_models": 0.014086900000620517,
+    "grid_evaluation": 0.9945809999990161,
+    "search_all_loads": 0.044411199998648954,
+    "total": 1.0530790999982855
+  },
+  "models": {
+    "stress": "deep_learning/results/team2-fem/mse.pt",
+    "reaction": "results/optimization/reaction_model_t3/mae.pt"
+  },
+  "environment": {
+    "python": "3.12.10",
+    "pytorch": "2.15.0+cpu",
+    "numpy": "2.5.5",
+    "processor": "Intel64 Family 6 Model 142 Stepping 12, GenuineIntel",
+    "torch_threads": 4
+  }
+}
